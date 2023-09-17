@@ -11,7 +11,7 @@ from skimage import io, transform
 from PIL import Image
 from pylab import *
 import seaborn as sns
-from matplotlib.pyplot import show 
+from matplotlib.pyplot import show
 from sklearn.metrics import confusion_matrix
 
 # data science
@@ -23,6 +23,7 @@ import pandas as pd
 from copy import deepcopy
 import cxr_dataset as CXR
 import eval_model as E
+
 
 def calc_cam(x, label, model):
     """
@@ -90,7 +91,7 @@ def calc_cam(x, label, model):
     # puxa os pesos correspondentes às 1024 camadas do modelo
     weights = model.state_dict()['classifier.0.weight']
     weights = weights.cpu().numpy()
-    
+
     bias = model.state_dict()['classifier.0.bias']
     bias = bias.cpu().numpy()
 
@@ -101,38 +102,39 @@ def calc_cam(x, label, model):
         for j in range(0, 7):
             for k in range(0, 1024):
                 cam[i, j] += y[k, i, j] * weights[label_index, k]
-    cam+=bias[label_index]
+    cam += bias[label_index]
 
-    #make cam into local region probabilities with sigmoid
+    # make cam into local region probabilities with sigmoid
     # transforma a cam em probabilidades de região local com sigmoid
-    cam=1/(1+np.exp(-cam))
-    
-    label_baseline_probs={
-        'Atelectasis':0.103,
-        'Cardiomegaly':0.025,
-        'Effusion':0.119,
-        'Infiltration':0.177,
-        'Mass':0.051,
-        'Nodule':0.056,
-        'Pneumonia':0.012,
-        'Pneumothorax':0.047,
-        'Consolidation':0.042,
-        'Edema':0.021,
-        'Emphysema':0.022,
-        'Fibrosis':0.015,
-        'Pleural_Thickening':0.03,
-        'Hernia':0.002
+    cam = 1 / (1 + np.exp(-cam))
+
+    label_baseline_probs = {
+        'Atelectasis': 0.103,
+        'Cardiomegaly': 0.025,
+        'Effusion': 0.119,
+        'Infiltration': 0.177,
+        'Mass': 0.051,
+        'Nodule': 0.056,
+        'Pneumonia': 0.012,
+        'Pneumothorax': 0.047,
+        'Consolidation': 0.042,
+        'Edema': 0.021,
+        'Emphysema': 0.022,
+        'Fibrosis': 0.015,
+        'Pleural_Thickening': 0.03,
+        'Hernia': 0.002
     }
-    
-    #normalize by baseline probabilities
+
+    # normalize by baseline probabilities
     # normaliza pelas probabilidades de linha de base
-    cam = cam/label_baseline_probs[label]
-    
-    #take log
+    cam = cam / label_baseline_probs[label]
+
+    # take log
     # tira o log
     cam = np.log(cam)
-    
+
     return cam
+
 
 def load_data(
         PATH_TO_IMAGES,
@@ -198,10 +200,10 @@ def load_data(
         transform=data_transform,
         finding=finding,
         starter_images=STARTER_IMAGES)
-    
+
     dataloader = torch.utils.data.DataLoader(
         dataset, batch_size=1, shuffle=False, num_workers=1)
-    
+
     return iter(dataloader), model
 
 
@@ -231,7 +233,7 @@ def show_next(dataloader, model, LABEL):
         'Fibrosis',
         'Pleural_Thickening',
         'Hernia']
-    
+
     label_index = next(
         (x for x in range(len(FINDINGS)) if FINDINGS[x] == LABEL))
 
@@ -241,47 +243,47 @@ def show_next(dataloader, model, LABEL):
     except StopIteration:
         print("Todos os exemplos foram esgotados - execute as células acima para gerar novos exemplos para revisar")
         return None
-        
+
     # obtém o mapa de calor
     original = inputs.clone()
     raw_cam = calc_cam(inputs, LABEL, model)
-    
+
     # cria previsões para o achado de interesse e todos os achados
     pred = model(torch.autograd.Variable(original.cpu())).data.numpy()[0]
     predx = ['%.3f' % elem for elem in list(pred)]
-    
-    fig, (showcxr,heatmap) =plt.subplots(ncols=2,figsize=(14,5))
-    
+
+    fig, (showcxr, heatmap) = plt.subplots(ncols=2, figsize=(14, 5))
+
     hmap = sns.heatmap(raw_cam.squeeze(),
-            cmap = 'viridis',
-            alpha = 0.3, # todo o mapa de calor é translúcido
-            annot = True,
-            zorder = 2,square=True,vmin=-5,vmax=5
-            )
-    
-    cxr=inputs.numpy().squeeze().transpose(1,2,0)    
+                       cmap='viridis',
+                       alpha=0.3,  # todo o mapa de calor é translúcido
+                       annot=True,
+                       zorder=2, square=True, vmin=-5, vmax=5
+                       )
+
+    cxr = inputs.numpy().squeeze().transpose(1, 2, 0)
     mean = np.array([0.485, 0.456, 0.406])
     std = np.array([0.229, 0.224, 0.225])
     cxr = std * cxr + mean
     cxr = np.clip(cxr, 0, 1)
-        
+
     hmap.imshow(cxr,
-          aspect = hmap.get_aspect(),
-          extent = hmap.get_xlim() + hmap.get_ylim(),
-          zorder = 1) # coloca o mapa sob o mapa de calor
+                aspect=hmap.get_aspect(),
+                extent=hmap.get_xlim() + hmap.get_ylim(),
+                zorder=1)  # coloca o mapa sob o mapa de calor
     hmap.axis('off')
-    hmap.set_title("P("+LABEL+")="+str(predx[label_index]))
-    
+    hmap.set_title("P(" + LABEL + ")=" + str(predx[label_index]))
+
     showcxr.imshow(cxr)
     showcxr.axis('off')
     showcxr.set_title(filename[0])
-    plt.savefig(str(LABEL+"_P"+str(predx[label_index])+"_file_"+filename[0]))
+    plt.savefig(str(LABEL + "_P" + str(predx[label_index]) + "_file_" + filename[0]))
     plt.show()
-    
-    preds_concat=pd.concat([pd.Series(FINDINGS),pd.Series(predx),pd.Series(labels.numpy().astype(bool)[0])],axis=1)
+
+    preds_concat = pd.concat([pd.Series(FINDINGS), pd.Series(predx), pd.Series(labels.numpy().astype(bool)[0])], axis=1)
     preds = pd.DataFrame(data=preds_concat)
-    preds.columns=["Achado","Probabilidade Prevista","Verdadeiro Positivo"]
-    preds.set_index("Achado",inplace=True)
-    preds.sort_values(by='Probabilidade Prevista',inplace=True,ascending=False)
-    
+    preds.columns = ["Achado", "Probabilidade Prevista", "Verdadeiro Positivo"]
+    preds.set_index("Achado", inplace=True)
+    preds.sort_values(by='Probabilidade Prevista', inplace=True, ascending=False)
+
     return preds
